@@ -13,26 +13,53 @@ st.markdown("Explora viajes de taxi en NYC y descubre patrones útiles para aná
 # CARGA Y LIMPIEZA DE DATOS
 # ----------------------------
 @st.cache_data
-def load_and_clean_data(path):
-    df = pd.read_csv(path)
+def load_data(uploaded_file=None):
+    try:
+        if uploaded_file is not None:
+            df = pd.read_csv(uploaded_file)
+            st.success("✅ Datos cargados desde el archivo subido por el usuario.")
+        else:
+            # Posibles rutas relativas
+            BASE_DIR = os.path.dirname(__file__)
+            possible_paths = [
+                os.path.join(BASE_DIR, "datasets", "taxi_data.csv"),
+                "datasets/taxi_data.csv",
+                "taxi_data.csv"
+            ]
+            
+            df = None
+            for path in possible_paths:
+                try:
+                    df = pd.read_csv(path)
+                    st.success(f"✅ Datos cargados correctamente desde: {path}")
+                    break
+                except FileNotFoundError:
+                    continue
+            
+            if df is None:
+                st.info("⚠️ No se encontró el archivo 'taxi_data.csv'. Sube un archivo para continuar.")
+                return pd.DataFrame()
 
-    # Conversión de fechas
-    df["tpep_pickup_datetime"] = pd.to_datetime(df["tpep_pickup_datetime"])
-    df["tpep_dropoff_datetime"] = pd.to_datetime(df["tpep_dropoff_datetime"])
-    
-    # Cálculo de duración en minutos
-    df["trip_duration"] = (df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]).dt.total_seconds() / 60
-    
-    # Limpieza básica de outliers
-    df = df[df["trip_distance"].between(0.5, 50)]
-    df = df[df["trip_duration"].between(1, 180)]
-    df = df[df["total_amount"] > 0]
-    df = df[df["passenger_count"].between(1, 6)]
-    
-    return df
+        # Limpieza y preprocesamiento
+        if 'tpep_pickup_datetime' in df.columns:
+            df['tpep_pickup_datetime'] = pd.to_datetime(df['tpep_pickup_datetime'], errors='coerce')
 
-default_file_path = os.path.join("datasets", "taxi_data.csv")
-df = load_and_clean_data(default_file_path)
+        if 'tpep_dropoff_datetime' in df.columns:
+            df['tpep_dropoff_datetime'] = pd.to_datetime(df['tpep_dropoff_datetime'], errors='coerce')
+
+        # Cálculo adicional si hace falta
+        if 'trip_distance' in df.columns and 'fare_amount' in df.columns:
+            df['fare_per_mile'] = df['fare_amount'] / df['trip_distance'].replace(0, pd.NA)
+
+        # Eliminar columnas vacías o irrelevantes
+        df = df.dropna(how='all', axis=1)
+
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Error al cargar los datos: {str(e)}")
+        return pd.DataFrame()
+
 
 # ----------------------------
 # DASHBOARD - VISUALIZACIONES
